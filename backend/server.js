@@ -13,16 +13,18 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-mongoose.connect('mongodb://localhost:27017/chatapp', {
+// ✅ MongoDB Atlas connection
+mongoose.connect('mongodb+srv://priyankarar4595:Manish%40123@cluster0.gsh52qh.mongodb.net/chatapp?retryWrites=true&w=majority&appName=Cluster0', {
   useNewUrlParser: true,
   useUnifiedTopology: true
-}).then(() => console.log(' MongoDB connected'))
-  .catch(err => console.error(' MongoDB error:', err));
+})
+.then(() => console.log('✅ MongoDB Atlas connected'))
+.catch(err => console.error('❌ MongoDB error:', err));
 
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
-const clients = new Map(); 
+const clients = new Map(); // socket => { username, roomId }
 
 wss.on('connection', (socket) => {
   console.log('🔌 New client connected');
@@ -31,25 +33,18 @@ wss.on('connection', (socket) => {
     const data = JSON.parse(raw);
     const { type } = data;
 
-    
+    // ✅ Create Room
     if (type === 'create-room') {
       const roomId = uuidv4();
       await Room.create({ roomId, createdBy: data.username, roomName: data.roomName });
 
       clients.set(socket, { username: data.username, roomId });
+
       await User.deleteMany({ username: data.username });
       await User.create({ username: data.username, socketId: socket._socket.remotePort, roomId });
 
-      socket.send(JSON.stringify({
-        type: 'room-created',
-        roomId,
-        roomName: data.roomName
-      }));
-
-      
+      socket.send(JSON.stringify({ type: 'room-created', roomId, roomName: data.roomName }));
       socket.send(JSON.stringify({ type: 'room-info', roomName: data.roomName }));
-
-      
       socket.send(JSON.stringify({ type: 'room-history', messages: [] }));
 
       broadcastToRoom(roomId, {
@@ -61,7 +56,7 @@ wss.on('connection', (socket) => {
       broadcastUserList(roomId);
     }
 
-   
+    // ✅ Join Room
     if (type === 'join-room') {
       const { username, roomId } = data;
       clients.set(socket, { username, roomId });
@@ -86,11 +81,19 @@ wss.on('connection', (socket) => {
       broadcastUserList(roomId);
     }
 
-    
+    // ✅ Handle Message
     if (type === 'message') {
       const { message, roomId, sender, receiver } = data;
 
-      const msg = await Message.create({ roomId, sender, receiver, message });
+      const msg = await Message.create({
+        roomId,
+        sender,
+        receiver,
+        message,
+        timestamp: new Date()
+      });
+
+      console.log("📥 Message saved:", msg);
 
       const payload = {
         type: receiver ? 'private-message' : 'message',
@@ -112,7 +115,7 @@ wss.on('connection', (socket) => {
       });
     }
 
-   
+    // ✅ Typing Indicator
     if (type === 'typing') {
       const { sender, receiver, roomId } = data;
 
@@ -133,6 +136,7 @@ wss.on('connection', (socket) => {
     }
   });
 
+  // ✅ On Disconnect
   socket.on('close', async () => {
     const userInfo = clients.get(socket);
     if (userInfo) {
@@ -150,6 +154,7 @@ wss.on('connection', (socket) => {
   });
 });
 
+// ✅ Utility: Broadcast to all in room
 function broadcastToRoom(roomId, payload) {
   clients.forEach((info, socket) => {
     if (info.roomId === roomId && socket.readyState === WebSocket.OPEN) {
@@ -158,6 +163,7 @@ function broadcastToRoom(roomId, payload) {
   });
 }
 
+// ✅ Utility: Send updated user list
 async function broadcastUserList(roomId) {
   const users = await User.find({ roomId }).select('username -_id');
   broadcastToRoom(roomId, {
@@ -166,6 +172,7 @@ async function broadcastUserList(roomId) {
   });
 }
 
+// ✅ Start server
 server.listen(5000, () => {
   console.log('🚀 Server running on http://localhost:5000');
 });
