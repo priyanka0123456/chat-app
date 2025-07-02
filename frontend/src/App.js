@@ -260,7 +260,7 @@ function App() {
         if (e.key === 'Enter') sendMessage();
         else handleTyping();
       }}
-      placeholder="Type a message..."
+      placeholder="Type a message....."
     />
   </div>
   <button onClick={sendMessage}>Send</button>
